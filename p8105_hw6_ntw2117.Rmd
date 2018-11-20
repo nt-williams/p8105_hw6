@@ -23,13 +23,13 @@ murder <- murder %>%
   mutate(solved = ifelse(disposition == "Closed by arrest", 1, 0), 
          victim_race = ifelse(victim_race != "White", "non-White", "White"), 
          victim_race = fct_relevel(victim_race, "White", "non-White"),
-         victim_age = as.double(victim_age)) %>% 
-  filter(city_state != c("Dallas, TX", "Pheonix, AZ", "Kansas City, MO", "Tulsa, AL"))
+         victim_age = as.numeric(victim_age)) %>% 
+  filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")))
 ```
 
 *some wee models*
 
-```{r}
+```{r baltimore logit}
 balt_model <- murder %>% 
   filter(city_state == "Baltimore, MD") %>% 
   glm(solved ~ victim_sex + victim_race + victim_age, family = binomial, data = .)
@@ -45,5 +45,16 @@ broom::tidy(balt_model) %>%
          "Upper bound" = or_upper) %>% 
   knitr::kable(digits = 3)
 ```
+
+```{r}
+murder %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(logit_solve = map(data, ~glm(solved ~ victim_sex + victim_race + victim_age, family = binomial, data = .x)))
+```
+
+
+
+
 
 
