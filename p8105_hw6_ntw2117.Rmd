@@ -7,11 +7,14 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(modelr)
 ```
 
 ### Problem One
 
-```{r importing and tidying wp data}
+*importing and manipulating data* 
+
+```{r importing and manipulating wp data}
 murder <- 
   read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 
@@ -24,5 +27,18 @@ murder <- murder %>%
   filter(city_state != c("Dallas, TX", "Pheonix, AZ", "Kansas City, MO", "Tulsa, AL"))
 ```
 
+*some wee models*
+
+```{r}
+balt_model <- murder %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  glm(solved ~ victim_sex + victim_race + victim_age, family = binomial, data = .)
+
+broom::tidy(balt_model) %>% 
+  mutate(or = exp(estimate), 
+         or_lower = exp(estimate - 1.96*std.error), 
+         or_upper = exp(estimate + 1.96*std.error)) %>% 
+  knitr::kable()
+```
 
 
