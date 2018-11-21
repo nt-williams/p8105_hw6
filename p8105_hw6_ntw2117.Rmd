@@ -16,7 +16,7 @@ theme_set(theme_bw())
 
 *importing and manipulating data* 
 
-```{r importing and manipulating wp data, message = FALSE}
+```{r importing and manipulating wp data, message = FALSE, warning = FALSE}
 murder <- 
   read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 
@@ -29,7 +29,7 @@ murder <- murder %>%
   filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")))
 ```
 
-*some wee models*
+*Logit models*
 
 ```{r baltimore logit}
 balt_model <- murder %>% 
@@ -71,6 +71,110 @@ murder %>%
   labs(y = "Odds ratio", 
        x = "City, State")
 ```
+
+### Problem Two
+
+```{r message = FALSE}
+bweight <- read_csv("data/birthweight.csv") %>% 
+  janitor::clean_names()
+
+# sum(is.na(bweight))
+# equals 0, no missing data
+
+corr <- list()
+
+for (i in 1:ncol(bweight)) {
+  corr[[i]] <- cor(bweight$bwt, bweight[i])
+}
+
+as.data.frame(corr) %>% 
+  gather(key = var, value = correlation) %>% 
+  filter(correlation > 0.2)
+
+lm_mod <- bweight %>% 
+  lm(bwt ~ bhead + blength + delwt + gaweeks + wtgain + mrace + frace + malform + babysex + menarche + smoken, data = .)
+
+# adding menarche because I think this is what the low values are associated with
+
+rmse(lm_mod, bweight)
+
+bweight %>% 
+  add_predictions(model = lm_mod) %>% 
+  add_residuals(model = lm_mod) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+  
+
+cor(bweight$bwt, bweight$gaweeks)
+
+bweight <- bweight %>% 
+  mutate(babysex = as.factor(babysex), 
+         frace = as.factor(frace), 
+         malform = as.factor(malform), 
+         mrace = as.factor(mrace))
+```
+
+```{r error = TRUE}
+cv_bweight <- crossv_mc(bweight, 100)
+
+# checking if any variables I don't think will be main predictors are signficant amongst themselves
+
+cv_bweight %>% 
+  mutate(lm_mod = map(train, ~lm(bwt ~ delwt + frace + menarche + mheight + momage + parity + wtgain, 
+                                 data = .x)), 
+         lm_mod = map(lm_mod, broom::tidy)) %>% 
+  select(.id, lm_mod) %>% 
+  unnest() %>% 
+  group_by(term) %>% 
+  summarize(avg_p = mean(p.value)) %>% 
+  filter(avg_p < 0.05)
+
+bweight %>% 
+  lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + malform +
+                                   mheight + mrace + parity + pnumlbw + ppbmi + ppwt + smoken + wtgain, data = .) %>% 
+
+mods <- cv_bweight %>% 
+  mutate(lm_mod = map(train, ~lm(bwt ~ babysex + gaweeks + malform + smoken, 
+                                 data = .x))) %>% 
+  mutate(pred = map2(test, lm_mod, add_predictions))
+  select(.id)
+  
+cv_bweight <- cv_bweight %>% 
+  mutate(lm_mod = map(train, ~lm(bwt ~ babysex + gaweeks + malform + smoken, 
+                                 data = .x))) %>% 
+  mutate(rmse_lm = map2_dbl(lm_mod, test, ~rmse(model = .x, data = .y)))
+
+cv_bweight %>% 
+  select(rmse_lm) %>% 
+  gather(key = .id, value = rmse_lm) %>% 
+  ggplot(aes(rmse_lm)) + 
+  geom_density()
+  
+pred <- map2(mods$test, mods$lm_mod, add_predictions)
+```
+
+```{r}
+choose <- c("delweight", "frace", "menarche", "mheight", "momage", "parity", "wtgain")
+
+pmodels <- list()
+
+varlist <- tibble(
+  x = 1:7
+)
+
+take <- function(i) {
+  as.tibble(combn(choose, i))
+}
+
+varlist <- varlist %>% 
+  group_by(x) %>% 
+  nest() %>% 
+  mutate(vars = map(x, take))
+
+```
+
+
 
 
 
