@@ -90,7 +90,7 @@ bweight <- bweight %>%
 
 ```
 
-```{r}
+```{r correlations, warning = FALSE}
 # dataset with only numeric variables
 wt_num <- select_if(bweight, is.numeric)
 
@@ -102,8 +102,9 @@ for (i in 1:ncol(wt_num)) {
 
 as.data.frame(corr) %>% 
   gather(key = var, value = correlation) %>% 
-  filter(abs(correlation) > 0.2) %>% 
-  knitr::kable()
+  filter(abs(correlation) > 0.2, 
+         var != "bwt") %>% 
+  knitr::kable(digits = 3)
 
 # loops through scatter plots of variables with bwt, dont run
 # make <- function(var) {
@@ -192,6 +193,8 @@ cv_bweight2 %>%
   ggplot(aes(x = model, y = rmse)) + 
   geom_violin()
 ```
+
+The above figure presents violin plots the RMSE for my proposed model, the main effects model, and the interaction model. Based on these plots, I would still chooose my model, however I might consider adding the interactions specified in the interaction model. It is important to note that I have not evaluated the signficance of any of these models in making a decision. 
 
 
 
