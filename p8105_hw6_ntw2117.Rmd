@@ -4,10 +4,11 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 
 library(tidyverse)
 library(modelr)
+library(patchwork)
 
 theme_set(theme_bw())
 ```
@@ -74,7 +75,7 @@ murder %>%
 
 ### Problem Two
 
-```{r importing cleaning and checking some correlations, message = FALSE}
+```{r importing cleaning, warning = FALSE}
 bweight <- read_csv("data/birthweight.csv") %>% 
   janitor::clean_names()
 
@@ -87,6 +88,9 @@ bweight <- bweight %>%
          malform = as.factor(malform), 
          mrace = as.factor(mrace))
 
+```
+
+```{r}
 # dataset with only numeric variables
 wt_num <- select_if(bweight, is.numeric)
 
@@ -98,19 +102,47 @@ for (i in 1:ncol(wt_num)) {
 
 as.data.frame(corr) %>% 
   gather(key = var, value = correlation) %>% 
-  filter(abs(correlation) > 0.2)
+  filter(abs(correlation) > 0.2) %>% 
+  knitr::kable()
 
-set.seed(20)
+# loops through scatter plots of variables with bwt, dont run
+# make <- function(var) {
+#   ggplot() + 
+#     geom_point(aes_string(x = "var", y = wt_num$bwt)) 
+# }
+# 
+# map(wt_num, make)
 ```
 
-```{r cross validation}
+```{r density plot and box plot, dpi = 300, out.width = "80%"}
+dens <- bweight %>% 
+  ggplot(aes(x = bwt)) + 
+  geom_histogram()
+
+box <- bweight %>% 
+  ggplot(aes(y = bwt)) + 
+  geom_boxplot()
+
+dens + box
+```
+
+I chose a regression model based on a combination of hypothesized factors that influence birth weight as well as a data driven model building process. I first came up with 3 possible models: `hyp_mod`, `cor_mod`, and `comb_mod`. The hypothesis only model was based on variables that had more "clinical" significance (except baby sex which I included as a control variable); for example, the babies length and head circumference most likely influences the babies weight, however it is impossible to intervene and make the baby longer or have a larger head. As such, I chose family monthly income as an indicator of socioeconomic status, gestational age, the number of prior live births, the average number of cigarettes smoked during the pregnancy, and the amount of weight gained by the mother during the pregnancy. Obviously, there are other variables that could have been included this model but I focused on limiting the number of predictors and being aware of possible collinearity issues. I also did not explore any interactions or non-linear models for interpretability reasons. 
+
+The second model I tested was simply based on numeric predictors that had a correlation coefficient whose absolute value with birth weight was greater than 0.20. By no means, is this a great way of selecting variables but this did give an indication of numeric variables that possibly have a linear relationship with birth weight. I also wanted to avoid something like step-wise selection while also not using a more advanced method like LASSO which would require using a package not discussed in class. These variables were circumference of the baby's head, the length of the baby, gestational age, mother weight gain, and mother's weight at delivery.
+
+The last candidate model was a combination of the hypothesized model and the correlation based model.
+
+```{r cross validation, dpi = 300, out.width = "65%"}
+
+set.seed(20)
+
 cv_bweight <- crossv_mc(bweight, 100)
 
 cv_bweight <- cv_bweight %>% 
     mutate(hyp_mod = map(train, ~lm(bwt ~ babysex + fincome + gaweeks + parity + smoken + wtgain, data = .x)),
-           cor_mod = map(train, ~lm(bwt ~ bhead + blength + gaweeks + wtgain, data = .x)), 
+           cor_mod = map(train, ~lm(bwt ~ bhead + blength + gaweeks + wtgain + delwt, data = .x)), 
            comb_mod = map(train, ~lm(bwt ~ babysex + fincome + gaweeks + parity + smoken + wtgain + 
-                                       bhead + blength, data = .x))) %>% 
+                                       bhead + blength + delwt, data = .x))) %>% 
     mutate(rmse_hyp = map2_dbl(hyp_mod, test, ~rmse(model = .x, data = .y)),
            rmse_cor = map2_dbl(cor_mod, test, ~rmse(model = .x, data = .y)),
            rmse_comb = map2_dbl(comb_mod, test, ~rmse(model = .x, data = .y)))
@@ -124,7 +156,9 @@ cv_bweight %>%
   geom_violin()
 ```
 
-```{r going with comb model}
+Based on the violin plots of the RMSE calculated using the testing set of data among the three models, I chose the combination model as my final model. 
+
+```{r going with comb model, dpi = 300, out.width = "65%"}
 comb_mod <- bweight %>% 
   lm(bwt ~ babysex + fincome + gaweeks + parity + smoken + wtgain + bhead + blength, data = .) 
 
@@ -136,7 +170,9 @@ bweight %>%
   geom_smooth(se = FALSE)
 ```
 
-```{r comparing to jeff models}
+The above scatter plot shows the relationship between predicted values and residuals for the final combination model. It appears that the model poorly predicts very low birth weights. It also appears the equality of variance assumption is not holding and that outliers/points with high influence are present. 
+
+```{r comparing to jeff models, dpi = 300, out.width = "65%"}
 cv_bweight2 <- crossv_mc(bweight, 100)
 
 cv_bweight2 <- cv_bweight2 %>% 
