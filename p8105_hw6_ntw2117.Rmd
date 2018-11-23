@@ -66,7 +66,7 @@ murder %>%
   ggplot(aes(x = city_state, y = or)) + 
   geom_point() + 
   geom_errorbar(aes(ymin = or_lower, ymax = or_upper)) + 
-  geom_hline(yintercept = 1.0, linetype = "dashed") + 
+  geom_hline(yintercept = 1.0, linetype = "dashed", color = "red") + 
   coord_flip() + 
   labs(y = "Odds ratio", 
        x = "City, State")
@@ -74,105 +74,93 @@ murder %>%
 
 ### Problem Two
 
-```{r message = FALSE}
+```{r importing cleaning and checking some correlations, message = FALSE}
 bweight <- read_csv("data/birthweight.csv") %>% 
   janitor::clean_names()
 
 # sum(is.na(bweight))
 # equals 0, no missing data
 
-corr <- list()
-
-for (i in 1:ncol(bweight)) {
-  corr[[i]] <- cor(bweight$bwt, bweight[i])
-}
-
-as.data.frame(corr) %>% 
-  gather(key = var, value = correlation) %>% 
-  filter(correlation > 0.2)
-
-lm_mod <- bweight %>% 
-  lm(bwt ~ bhead + blength + delwt + gaweeks + wtgain + mrace + frace + malform + babysex + menarche + smoken, data = .)
-
-# adding menarche because I think this is what the low values are associated with
-
-rmse(lm_mod, bweight)
-
-bweight %>% 
-  add_predictions(model = lm_mod) %>% 
-  add_residuals(model = lm_mod) %>% 
-  ggplot(aes(x = pred, y = resid)) + 
-  geom_point() + 
-  geom_smooth(se = FALSE)
-  
-
-cor(bweight$bwt, bweight$gaweeks)
-
 bweight <- bweight %>% 
   mutate(babysex = as.factor(babysex), 
          frace = as.factor(frace), 
          malform = as.factor(malform), 
          mrace = as.factor(mrace))
-```
 
-```{r error = TRUE}
-cv_bweight <- crossv_mc(bweight, 100)
+# dataset with only numeric variables
+wt_num <- select_if(bweight, is.numeric)
 
-# checking if any variables I don't think will be main predictors are signficant amongst themselves
+corr <- list()
 
-cv_bweight %>% 
-  mutate(lm_mod = map(train, ~lm(bwt ~ delwt + frace + menarche + mheight + momage + parity + wtgain, 
-                                 data = .x)), 
-         lm_mod = map(lm_mod, broom::tidy)) %>% 
-  select(.id, lm_mod) %>% 
-  unnest() %>% 
-  group_by(term) %>% 
-  summarize(avg_p = mean(p.value)) %>% 
-  filter(avg_p < 0.05)
-
-bweight %>% 
-  lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + malform +
-                                   mheight + mrace + parity + pnumlbw + ppbmi + ppwt + smoken + wtgain, data = .) %>% 
-
-mods <- cv_bweight %>% 
-  mutate(lm_mod = map(train, ~lm(bwt ~ babysex + gaweeks + malform + smoken, 
-                                 data = .x))) %>% 
-  mutate(pred = map2(test, lm_mod, add_predictions))
-  select(.id)
-  
-cv_bweight <- cv_bweight %>% 
-  mutate(lm_mod = map(train, ~lm(bwt ~ babysex + gaweeks + malform + smoken, 
-                                 data = .x))) %>% 
-  mutate(rmse_lm = map2_dbl(lm_mod, test, ~rmse(model = .x, data = .y)))
-
-cv_bweight %>% 
-  select(rmse_lm) %>% 
-  gather(key = .id, value = rmse_lm) %>% 
-  ggplot(aes(rmse_lm)) + 
-  geom_density()
-  
-pred <- map2(mods$test, mods$lm_mod, add_predictions)
-```
-
-```{r}
-choose <- c("delweight", "frace", "menarche", "mheight", "momage", "parity", "wtgain")
-
-pmodels <- list()
-
-varlist <- tibble(
-  x = 1:7
-)
-
-take <- function(i) {
-  as.tibble(combn(choose, i))
+for (i in 1:ncol(wt_num)) {
+  corr[[i]] <- cor(wt_num$bwt, wt_num[i])
 }
 
-varlist <- varlist %>% 
-  group_by(x) %>% 
-  nest() %>% 
-  mutate(vars = map(x, take))
-
+as.data.frame(corr) %>% 
+  gather(key = var, value = correlation) %>% 
+  filter(abs(correlation) > 0.2)
 ```
+
+```{r cross validation}
+cv_bweight <- crossv_mc(bweight, 100)
+
+cv_bweight <- cv_bweight %>% 
+    mutate(hyp_mod = map(train, ~lm(bwt ~ babysex + delwt + fincome + gaweeks + malform + menarche + parity + 
+                                     pnumlbw + smoken + wtgain, data = .x)),
+           cor_mod = map(train, ~lm(bwt ~ bhead + blength + delwt + gaweeks + wtgain, data = .x)), 
+           comb_mod = map(train, ~lm(bwt ~ babysex + delwt + fincome + gaweeks + malform + menarche + parity + 
+                                     pnumlbw + smoken + wtgain + bhead + blength, data = .x))) %>% 
+  mutate(rmse_hyp = map2_dbl(hyp_mod, test, ~rmse(model = .x, data = .y)),
+         rmse_cor = map2_dbl(cor_mod, test, ~rmse(model = .x, data = .y)),
+         rmse_comb = map2_dbl(comb_mod, test, ~rmse(model = .x, data = .y)))
+
+cv_bweight %>%  
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
+```
+
+```{r going with comb model}
+comb_mod <- bweight %>% 
+  lm(bwt ~ babysex + delwt + fincome + gaweeks + malform + menarche + parity + 
+                                     pnumlbw + smoken + wtgain + bhead + blength, data = .) 
+
+bweight %>% 
+  add_predictions(comb_mod) %>% 
+  add_residuals(comb_mod) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+```
+
+```{r comparing to jeff models}
+cv_bweight2 <- crossv_mc(bweight, 100)
+
+cv_bweight2 <- cv_bweight2 %>% 
+  mutate(my_mod = map(train, ~lm(bwt ~ babysex + delwt + fincome + gaweeks + malform + menarche + parity + 
+                                     pnumlbw + smoken + wtgain + bhead + blength, data = .x)), 
+         main_mod = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)), 
+         emm_mod = map(train, ~lm(bwt ~ (bhead + blength + babysex)^4, data = .x))) %>% 
+  mutate(rmse_my = map2_dbl(my_mod, test, ~rmse(model = .x, data = .y)),
+         rmse_main = map2_dbl(main_mod, test, ~rmse(model = .x, data = .y)),
+         rmse_emm = map2_dbl(emm_mod, test, ~rmse(model = .x, data = .y)))
+
+cv_bweight2 %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
+```
+
+
+
+
+
 
 
 
