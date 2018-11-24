@@ -111,7 +111,7 @@ After loading the data, I first checked for missing values and found that there 
 
 *Exploratory plots and analyses*
 
-```{r density plot and box plot, dpi = 300, out.width = "80%"}
+```{r density plot and box plot, dpi = 300, out.width = "65%"}
 # visual peek at birthweight
 dens <- bweight %>% 
   ggplot(aes(x = bwt)) + 
