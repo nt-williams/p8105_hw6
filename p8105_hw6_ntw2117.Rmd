@@ -15,7 +15,7 @@ theme_set(theme_bw())
 
 ### Problem One
 
-*importing and manipulating data* 
+*Importing and manipulating data* 
 
 ```{r importing and manipulating wp data, message = FALSE, warning = FALSE}
 murder <- 
@@ -89,7 +89,7 @@ Boston has the lowest odds ratio of all the cities analyzed indicating that they
 
 ### Problem Two
 
-*importing and cleaning data*
+*Importing and cleaning data*
 
 ```{r importing cleaning, warning = FALSE}
 bweight <- read_csv("data/birthweight.csv") %>% 
@@ -115,11 +115,14 @@ After loading the data, I first checked for missing values and found that there 
 # visual peek at birthweight
 dens <- bweight %>% 
   ggplot(aes(x = bwt)) + 
-  geom_histogram()
+  geom_histogram() + 
+  labs(x = "Birthweight", 
+       y = "Count")
 
 box <- bweight %>% 
   ggplot(aes(y = bwt)) + 
-  geom_boxplot()
+  geom_boxplot() + 
+  labs(y = "Birthweight")
 
 wrap_elements(dens + box) + ggtitle("Histogram and boxplot of infant birthweight")
 ```
@@ -141,7 +144,8 @@ as.data.frame(corr) %>%
   gather(key = var, value = correlation) %>% 
   filter(abs(correlation) > 0.2, 
          var != "bwt") %>% 
-  knitr::kable(digits = 3)
+  knitr::kable(digits = 3, 
+               col.names = c("Variable", "Correlation"))
 
 # loops through scatter plots of variables with bwt, dont run
 # make <- function(var) {
@@ -184,7 +188,9 @@ cv_bweight %>%
          model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
   geom_violin() + 
-  labs(title = "Violin plots of RMSE")
+  labs(title = "Violin plots of RMSE", 
+       x = "Model", 
+       y = "RMSE")
 ```
 
 ```{r my models avg rmse}
@@ -195,6 +201,8 @@ cv_bweight %>%
          model = fct_inorder(model)) %>% 
   group_by(model) %>% 
   summarize(avg_rmse = mean(rmse)) %>% 
+  rename("Model" = model, 
+         "Avg. RMSE" = avg_rmse) %>% 
   knitr::kable(digits = 3)
 ```
 
@@ -214,7 +222,9 @@ bweight %>%
   ggplot(aes(x = pred, y = resid)) + 
   geom_point() + 
   geom_smooth(se = FALSE) + 
-  labs(title = "Predicted values vs. residuals plot for combination model")
+  labs(title = "Predicted values vs. residuals plot for combination model", 
+       x = "Predicted value", 
+       y = "Residual")
 ```
 
 The above scatter plot shows the relationship between predicted values and residuals for the final combination model. It appears that the model poorly predicts very low birth weights. It also appears the equality of variance assumption is not holding and that outliers/points with high influence are present.
@@ -240,7 +250,9 @@ cv_bweight2 %>%
          model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
   geom_violin() + 
-  labs(title = "Violin plots of RMSE")
+  labs(title = "Violin plots of RMSE", 
+       x = "Model", 
+       y = "RMSE")
 ```
 
 ```{r models avg rmse}
@@ -251,6 +263,8 @@ cv_bweight2 %>%
          model = fct_inorder(model)) %>% 
   group_by(model) %>% 
   summarize(avg_rmse = mean(rmse)) %>% 
+  rename("Model" = model, 
+         "Avg. RMSE" = avg_rmse) %>% 
   knitr::kable(digits = 3)
 ```
 
