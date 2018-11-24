@@ -85,9 +85,11 @@ murder %>%
        x = "City, State")
 ```
 
-Boston has the lowest odds ratio of all the cities analzed indicating that they are the least likely to solve a non-White homicide compared to how likely they are to solve a White homicide; Boston is followed by Omaha, Nebraska and Oakland, California. Most cities appear to trend in this direction. However, about half have confidence intervals that include one. Tampa, Florida and Birmingham, Alabama are the only two cities who have estimated odds ratios greater than one, indicating the odds of a non-White homicide being solved are greater than a White homicide being solved. However, both estimates have very wide confidence intervals and are thus non-significant. The width of the confidence intervals actually tells us some important information as well. The cities with narrow intervals are cities with a large amount of homicides while the cities with wide intervals have fewer. 
+Boston has the lowest odds ratio of all the cities analyzed indicating that they are the least likely to solve a non-White homicide compared to how likely they are to solve a White homicide; Boston is followed by Omaha, Nebraska and Oakland, California. Most cities appear to trend in this direction. However, about half have confidence intervals that include one. Tampa, Florida and Birmingham, Alabama are the only two cities who have estimated odds ratios greater than one, indicating the odds of a non-White homicide being solved are greater than a White homicide being solved. However, both estimates have very wide confidence intervals and are thus non-significant. The width of the confidence intervals actually tells us some important information as well. The cities with narrow intervals are cities with a large amount of homicides while the cities with wide intervals have fewer. 
 
 ### Problem Two
+
+*importing and cleaning data*
 
 ```{r importing cleaning, warning = FALSE}
 bweight <- read_csv("data/birthweight.csv") %>% 
@@ -105,6 +107,9 @@ bweight <- bweight %>%
          mrace = as.factor(mrace))
 ```
 
+After loading the data, I first checked for missing values and found that there were none. I then converted the baby's sex, father's race, the indicator of a malformation, and mother's race to factors. 
+
+*Exploratory plots and analyses*
 
 ```{r density plot and box plot, dpi = 300, out.width = "80%"}
 # visual peek at birthweight
@@ -118,6 +123,8 @@ box <- bweight %>%
 
 wrap_elements(dens + box) + ggtitle("Histogram and boxplot of infant birthweight")
 ```
+
+Looking at a histogram and boxplot of infant birth weight, birth weight appears to be normally distributed. However, there seem to be many outliers. 
 
 ```{r correlations, warning = FALSE}
 # dataset with only numeric variables
@@ -144,6 +151,8 @@ as.data.frame(corr) %>%
 # 
 # map(wt_num, make)
 ```
+
+*Model building*
 
 I chose a regression model based on a combination of hypothesized factors that influence birth weight as well as a data driven model building process. I first came up with 3 possible models: `hyp_mod`, `cor_mod`, and `comb_mod`. The hypothesis only model was based on variables that had more "clinical" significance (except baby sex which I included as a control variable); for example, the babies length and head circumference most likely influences the babies weight, however it is impossible to intervene and make the baby longer or have a larger head. As such, I chose family monthly income as an indicator of socioeconomic status, gestational age, the number of prior live births, the average number of cigarettes smoked during the pregnancy, and the amount of weight gained by the mother during the pregnancy. Obviously, there are other variables that could have been included in this model but I focused on limiting the number of predictors and being aware of possible collinearity issues. I also did not explore any interactions or non-linear models for reasons of interpretability. 
 
@@ -174,10 +183,24 @@ cv_bweight %>%
   mutate(model = str_replace(model, "rmse_", ""),
          model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
-  geom_violin()
+  geom_violin() + 
+  labs(title = "Violin plots of RMSE")
 ```
 
-Based on the violin plots of the RMSE calculated using the testing set of data among the three models, I chose the combination model as my final model. 
+```{r my models avg rmse}
+cv_bweight %>%  
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  group_by(model) %>% 
+  summarize(avg_rmse = mean(rmse)) %>% 
+  knitr::kable(digits = 3)
+```
+
+*Final model*
+
+Based on the violin plots of the RMSE calculated using the testing set of data among the three models, I chose the combination model as my final model. It had the lowest average RMSE (279.48).
 
 ```{r going with comb model, dpi = 300, out.width = "65%"}
 # creating model using all data
@@ -190,20 +213,23 @@ bweight %>%
   add_residuals(comb_mod) %>% 
   ggplot(aes(x = pred, y = resid)) + 
   geom_point() + 
-  geom_smooth(se = FALSE)
+  geom_smooth(se = FALSE) + 
+  labs(title = "Predicted values vs. residuals plot for combination model")
 ```
 
-The above scatter plot shows the relationship between predicted values and residuals for the final combination model. It appears that the model poorly predicts very low birth weights. It also appears the equality of variance assumption is not holding and that outliers/points with high influence are present. 
+The above scatter plot shows the relationship between predicted values and residuals for the final combination model. It appears that the model poorly predicts very low birth weights. It also appears the equality of variance assumption is not holding and that outliers/points with high influence are present.
+
+*Comparing with other models*
 
 ```{r comparing to jeff models, dpi = 300, out.width = "65%"}
 cv_bweight2 <- crossv_mc(bweight, 100)
 
 cv_bweight2 <- cv_bweight2 %>% 
-  mutate(my_mod = map(train, ~lm(bwt ~ babysex + fincome + gaweeks + parity + smoken + wtgain + 
+  mutate(mine_mod = map(train, ~lm(bwt ~ babysex + fincome + gaweeks + parity + smoken + wtgain + 
                                        bhead + blength, data = .x)), 
          main_mod = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)), 
          emm_mod = map(train, ~lm(bwt ~ (bhead + blength + babysex)^4, data = .x))) %>% 
-  mutate(rmse_my = map2_dbl(my_mod, test, ~rmse(model = .x, data = .y)),
+  mutate(rmse_mine = map2_dbl(mine_mod, test, ~rmse(model = .x, data = .y)),
          rmse_main = map2_dbl(main_mod, test, ~rmse(model = .x, data = .y)),
          rmse_emm = map2_dbl(emm_mod, test, ~rmse(model = .x, data = .y)))
 
@@ -213,10 +239,22 @@ cv_bweight2 %>%
   mutate(model = str_replace(model, "rmse_", ""),
          model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
-  geom_violin()
+  geom_violin() + 
+  labs(title = "Violin plots of RMSE")
 ```
 
-The above figure presents violin plots for the RMSE for my proposed model, the main effects model, and the interaction model. Based on these plots, I would still chooose my model, however I might consider adding the interactions specified in the interaction model. It is important to note that I have not evaluated the signficance of any of these models or used another measures like AIC in making a decision. 
+```{r models avg rmse}
+cv_bweight2 %>%  
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  group_by(model) %>% 
+  summarize(avg_rmse = mean(rmse)) %>% 
+  knitr::kable(digits = 3)
+```
+
+The above figure presents violin plots for the RMSE for my proposed model, the main effects model, and the interaction model. Based on these plots, I would still choose my model, however I might consider adding the interactions specified in the interaction model. It is important to note that I have not evaluated the significance of any of these models or used another measures like AIC in making a decision. 
 
 
 
