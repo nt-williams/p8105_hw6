@@ -49,6 +49,8 @@ broom::tidy(balt_model) %>%
   knitr::kable(digits = 3)
 ```
 
+In Baltimore, the odds of a non-White homicide victims case being solved is 0.441 times that of White victim (95% CI: 0.313, 0.62)
+
 ```{r out.width = "70%", fig.height = 8, fig.align = "center", dpi = 300}
 murder %>% 
   group_by(city_state) %>% 
@@ -69,9 +71,12 @@ murder %>%
   geom_errorbar(aes(ymin = or_lower, ymax = or_upper)) + 
   geom_hline(yintercept = 1.0, linetype = "dashed", color = "red") + 
   coord_flip() + 
-  labs(y = "Odds ratio", 
+  labs(title = "OR's for solving non-White homicide compared \nto solving a White homicide in different cities", 
+       y = "Odds ratio", 
        x = "City, State")
 ```
+
+Boston has the lowest odds ratio of all the cities analzed indicating that they are the least likely to solve a non-White homicide compared to how likely they are to solve a White homicide; Boston is followed by Omaha, Nebraska and Oakland, California. Most cities appear to trend in this direction. However, about half have confidence intervals that include one. Tampa, Florida and Birmingham, Alabama are the only two cities who have estimated odds ratios greater than one, indicating the odds of a non-White homicide being solved are greater than a White homicide being solved. However, both estimates have very wide confidence intervals and are thus non-significant. The width of the confidence intervals actually tells us some important information as well. The cities with narrow intervals are cities with a large amount of homicides while the cities with wide intervals have fewer. 
 
 ### Problem Two
 
